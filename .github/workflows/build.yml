@@ -33,11 +33,24 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # KernelSU इंटीग्रेशन (कर्नल रूट)
+        # KernelSU इंटीग्रेशन
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
         
-        # Defconfig सेट करना और कंपाइल करना
-        make O=out vendor/sunstone_defconfig
+        # सही Defconfig फाइल को ऑटोमैटिकली ढूंढने की स्मार्ट स्क्रिप्ट
+        echo "🔍 Correct defconfig फाइल ढूंढी जा रही है..."
+        FOUND_CONFIG=$(find arch/arm64/configs/ -name "*sunstone*_defconfig" -o -name "*stone*_defconfig" -o -name "*sm4375*_defconfig" -o -name "*perf_defconfig" | head -n 1)
+        
+        if [ -z "$FOUND_CONFIG" ]; then
+          echo "❌ कोई भी मैचिंग defconfig फाइल नहीं मिली!"
+          exit 1
+        fi
+        
+        # 'arch/arm64/configs/' वाले हिस्से को हटाकर नाम साफ़ करना
+        DEFCONFIG_NAME=$(echo "$FOUND_CONFIG" | sed 's|arch/arm64/configs/||')
+        echo "✅ फाइल मिल गई: $DEFCONFIG_NAME"
+        
+        # कंपाइल करना शुरू करें
+        make O=out "$DEFCONFIG_NAME"
         make -j$(nproc --all) O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
         
     - name: Check and Package Kernel
