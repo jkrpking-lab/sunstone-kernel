@@ -1,4 +1,4 @@
-name: Find Secret Defconfig
+name: Build Custom Kernel (Final)
 
 on:
   workflow_dispatch:
@@ -7,14 +7,60 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Build Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+
+    - name: Setup Compiler (Proton Clang)
+      run: |
+        mkdir clang
+        cd clang
+        git clone --depth=1 https://github.com/kdrag0n/proton-clang.git .
+        echo "COMPILER_PATH=$(pwd)/bin" >> $GITHUB_ENV
+
     - name: Fetch Official Xiaomi Kernel Source
       run: |
         git clone --depth=1 https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git -b sunstone-u-oss kernel-source
 
-    - name: Search Defconfig Files
+    - name: Compile Kernel
       run: |
         cd kernel-source
-        echo "🔍 जासूसी शुरू: arch/arm64/configs/ के अंदर मौजूद सारी फाइल्स की लिस्ट नीचे है 👇"
-        find arch/arm64/configs/ -type f
-        echo "🚨 लिस्ट प्रिंट हो गई है! अब हम प्रोसेस रोक रहे हैं।"
-        exit 1
+        export PATH="${{ env.COMPILER_PATH }}:$PATH"
+        export ARCH=arm64
+        export SUBARCH=arm64
+        
+        # KernelSU इंटीग्रेशन (कर्नल रूट)
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+        
+        # कंपाइलेशन शुरू (सही defconfig के साथ)
+        echo "✅ Compiling with default configuration..."
+        make O=out defconfig
+        
+        # अगर vendor/bengal_GKI.config मौजूद है, तो उसे मर्ज करें (Xiaomi GKI के लिए ज़रूरी)
+        if [ -f "arch/arm64/configs/vendor/bengal_GKI.config" ]; then
+          scripts/kconfig/merge_config.sh -O out out/.config arch/arm64/configs/vendor/bengal_GKI.config
+        fi
+        
+        make -j$(nproc --all) O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        
+    - name: Check and Package Kernel
+      run: |
+        cd kernel-source
+        if [ -f "out/arch/arm64/boot/Image" ]; then
+          echo "🎉 कर्नल सफलतापूर्वक बन गया है!"
+          mkdir ../output
+          cp out/arch/arm64/boot/Image ../output/
+        else
+          echo "❌ कंपाइलेशन फेल हो गया। Image फाइल नहीं बनी।"
+          exit 1
+        fi
+
+    - name: Upload Kernel Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: Sunstone-Kernel-Final
+        path: output/Image
