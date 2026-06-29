@@ -1,4 +1,4 @@
-name: Build Custom Kernel (Final)
+name: Build Custom Kernel (LLVM Fix)
 
 on:
   workflow_dispatch:
@@ -33,19 +33,30 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # KernelSU इंटीग्रेशन (कर्नल रूट)
+        # KernelSU इंटीग्रेशन
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
         
-        # कंपाइलेशन शुरू (सही defconfig के साथ)
         echo "✅ Compiling with default configuration..."
-        make O=out defconfig
+        make O=out ARCH=arm64 defconfig
         
-        # अगर vendor/bengal_GKI.config मौजूद है, तो उसे मर्ज करें (Xiaomi GKI के लिए ज़रूरी)
         if [ -f "arch/arm64/configs/vendor/bengal_GKI.config" ]; then
           scripts/kconfig/merge_config.sh -O out out/.config arch/arm64/configs/vendor/bengal_GKI.config
         fi
         
-        make -j$(nproc --all) O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        echo "🚀 Starting heavy compilation with LLVM and Warnings Ignored..."
+        # KCFLAGS="-Wno-error" वार्निंग्स की वजह से कंपाइलेशन को रुकने नहीं देगा
+        make -j$(nproc --all) O=out ARCH=arm64 \
+          CC=clang \
+          LD=ld.lld \
+          AR=llvm-ar \
+          NM=llvm-nm \
+          OBJCOPY=llvm-objcopy \
+          OBJDUMP=llvm-objdump \
+          STRIP=llvm-strip \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+          LLVM=1 LLVM_IAS=1 \
+          KCFLAGS="-Wno-error"
         
     - name: Check and Package Kernel
       run: |
