@@ -1,7 +1,7 @@
 name: Build Custom Kernel
 
 on:
-  workflow_dispatch: # इससे आप जब चाहें बटन दबाकर कंपाइलेशन शुरू कर सकते हैं
+  workflow_dispatch:
 
 jobs:
   build:
@@ -24,8 +24,7 @@ jobs:
 
     - name: Fetch Kernel Source
       run: |
-        git clone --depth=1 https://github.com/crdroidandroid/android_kernel_xiaomi_sm4375.git -b 14.0 kernel-source
-        # नोट: यह crDroid का ऑफिशियल sm4375 (sunstone) कर्नल सोर्स है।
+        git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_sm4375.git -b lineage-21 kernel-source
 
     - name: Compile Kernel
       run: |
@@ -34,7 +33,7 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # KernelSU इन्टीग्रेशन (कोड के अंदर ही रूटिंग जोड़ना)
+        # KernelSU इंटीग्रेशन
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
         
         # Defconfig सेट करना और कंपाइल करना
