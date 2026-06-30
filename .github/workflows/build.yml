@@ -1,4 +1,4 @@
-name: Build Custom Kernel (Debug Mode)
+name: Build Custom Kernel (Taskstats Fix)
 
 on:
   workflow_dispatch:
@@ -36,14 +36,20 @@ jobs:
         # KernelSU इंटीग्रेशन
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
         
+        echo "🔧 Xiaomi के खराब कोड को फिक्स किया जा रहा है..."
+        # लाइन 469 के अधूरे #elif को #else में बदलना
+        sed -i '469s/#elif/#else/' kernel/taskstats.c
+        # लाइन 506 के बिना डिक्लेयर वाले फंक्शन को कमेंट (//) करके बंद करना
+        sed -i '506s/sysstats_fill_zoneinfo(stats);/\/\/sysstats_fill_zoneinfo(stats);/' kernel/taskstats.c
+        echo "✅ कोड सफलतापूर्वक फिक्स हो गया!"
+        
         make O=out ARCH=arm64 defconfig
         
         if [ -f "arch/arm64/configs/vendor/bengal_GKI.config" ]; then
           scripts/kconfig/merge_config.sh -O out out/.config arch/arm64/configs/vendor/bengal_GKI.config
         fi
         
-        echo "🚀 Compiling and saving logs to build.log..."
-        # 2>&1 | tee कमांड से स्क्रीन का सारा आउटपुट फाइल में सेव होगा
+        echo "🚀 Starting heavy compilation with LLVM..."
         make -j$(nproc --all) O=out ARCH=arm64 \
           CC=clang \
           LD=ld.lld \
@@ -75,9 +81,9 @@ jobs:
         name: Sunstone-Kernel-Final
         path: output/Image
 
-    - name: Upload Error Log (फेल होने पर भी काम करेगा)
+    - name: Upload Error Log
       uses: actions/upload-artifact@v4
-      if: always() # यह कमांड सुनिश्चित करेगा कि फेल होने पर भी हमें फाइल मिल जाए
+      if: always()
       with:
         name: Error-Log-File
         path: build.log
