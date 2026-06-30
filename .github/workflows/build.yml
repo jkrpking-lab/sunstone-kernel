@@ -1,4 +1,4 @@
-name: Build Custom Kernel (LLVM Fix)
+name: Build Custom Kernel (Debug Mode)
 
 on:
   workflow_dispatch:
@@ -36,15 +36,14 @@ jobs:
         # KernelSU इंटीग्रेशन
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
         
-        echo "✅ Compiling with default configuration..."
         make O=out ARCH=arm64 defconfig
         
         if [ -f "arch/arm64/configs/vendor/bengal_GKI.config" ]; then
           scripts/kconfig/merge_config.sh -O out out/.config arch/arm64/configs/vendor/bengal_GKI.config
         fi
         
-        echo "🚀 Starting heavy compilation with LLVM and Warnings Ignored..."
-        # KCFLAGS="-Wno-error" वार्निंग्स की वजह से कंपाइलेशन को रुकने नहीं देगा
+        echo "🚀 Compiling and saving logs to build.log..."
+        # 2>&1 | tee कमांड से स्क्रीन का सारा आउटपुट फाइल में सेव होगा
         make -j$(nproc --all) O=out ARCH=arm64 \
           CC=clang \
           LD=ld.lld \
@@ -56,7 +55,7 @@ jobs:
           CROSS_COMPILE=aarch64-linux-gnu- \
           CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
           LLVM=1 LLVM_IAS=1 \
-          KCFLAGS="-Wno-error"
+          KCFLAGS="-Wno-error" 2>&1 | tee ../build.log
         
     - name: Check and Package Kernel
       run: |
@@ -66,7 +65,7 @@ jobs:
           mkdir ../output
           cp out/arch/arm64/boot/Image ../output/
         else
-          echo "❌ कंपाइलेशन फेल हो गया। Image फाइल नहीं बनी।"
+          echo "❌ कंपाइलेशन फेल हो गया।"
           exit 1
         fi
 
@@ -75,3 +74,10 @@ jobs:
       with:
         name: Sunstone-Kernel-Final
         path: output/Image
+
+    - name: Upload Error Log (फेल होने पर भी काम करेगा)
+      uses: actions/upload-artifact@v4
+      if: always() # यह कमांड सुनिश्चित करेगा कि फेल होने पर भी हमें फाइल मिल जाए
+      with:
+        name: Error-Log-File
+        path: build.log
